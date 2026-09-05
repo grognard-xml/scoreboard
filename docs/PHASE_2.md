@@ -16,7 +16,7 @@ upload path doesn't help if the thing being uploaded was fabricated before
 the upload ever happened. This is the exact same shape of problem as the
 local achievements-tampering issue the desktop app already had to defend
 against (see `apps/desktop/src/achievementsFile.ts` in the main
-`lejeanbaptiste` repo) — just moved from "can I edit my own local file" to
+`grognard` repo) — just moved from "can I edit my own local file" to
 "can I edit my own local file and then publish the result."
 
 No amount of OAuth, rate-limiting, or backend hardening on this repo's

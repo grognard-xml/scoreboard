@@ -1,6 +1,6 @@
 export interface Env {
   LEADERBOARD_KV: KVNamespace;
-  /** Fine-grained PAT, repo-scoped to lejeanbaptiste/scoreboard,
+  /** Fine-grained PAT, repo-scoped to grognard/scoreboard,
    * Contents: read+write only. Set via `wrangler secret put`, never
    * present in source or shipped to any client. */
   GITHUB_WRITE_TOKEN: string;
@@ -10,7 +10,7 @@ export interface Env {
   ADMIN_GITHUB_IDS: string;
 }
 
-const REPO_OWNER = 'lejeanbaptiste';
+const REPO_OWNER = 'grognard';
 const REPO_NAME = 'scoreboard';
 const SCORES_PATH = 'scores.json';
 const AVATARS_DIR = 'avatars';
@@ -125,7 +125,7 @@ async function verifyGitHubUser(token: string): Promise<GitHubUser | null> {
   const response = await fetch('https://api.github.com/user', {
     headers: {
       authorization: `Bearer ${token}`,
-      'user-agent': 'ljb-leaderboard-worker',
+      'user-agent': 'grognard-leaderboard-worker',
       accept: 'application/vnd.github+json',
     },
   });
@@ -171,7 +171,7 @@ async function putGitHubFile(
   const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`;
   const headers = {
     authorization: `Bearer ${env.GITHUB_WRITE_TOKEN}`,
-    'user-agent': 'ljb-leaderboard-worker',
+    'user-agent': 'grognard-leaderboard-worker',
     accept: 'application/vnd.github+json',
   };
 

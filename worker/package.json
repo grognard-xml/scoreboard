@@ -1,7 +1,7 @@
 {
-  "name": "ljb-leaderboard-worker",
+  "name": "grognard-leaderboard-worker",
   "version": "1.0.0",
-  "description": "Phase 1.5 leaderboard backend: verifies GitHub identity, rate-limits, and publishes scores.json to lejeanbaptiste/scoreboard.",
+  "description": "Phase 1.5 leaderboard backend: verifies GitHub identity, rate-limits, and publishes scores.json to grognard/scoreboard.",
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
