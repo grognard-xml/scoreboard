@@ -1,9 +1,9 @@
 # Grognard Service Record Leaderboard
 
-Static leaderboard for [Grognard](https://github.com/grognard/grognard).
+Static leaderboard for [Grognard](https://github.com/grognard-xml/grognard).
 `index.html` reads `scores.json` and renders a ranked table — no build
 step, served as-is via GitHub Pages at
-[grognard.github.io/scoreboard](https://grognard.github.io/scoreboard/).
+[grognard-xml.github.io/scoreboard](https://grognard-xml.github.io/scoreboard/).
 
 ## How submission works (Phase 1.5, implemented)
 
@@ -26,7 +26,7 @@ See [`worker/README.md`](worker/README.md) for the Worker itself.
 
 ### Fallback: comment-based submission (Phase 1, still live)
 
-If the Worker is ever down, [issue #1](https://github.com/grognard/scoreboard/issues/1)
+If the Worker is ever down, [issue #1](https://github.com/grognard-xml/scoreboard/issues/1)
 (a permanent, pinned thread) still works as a manual fallback: post a
 comment there with your stats as a fenced ` ```json ` block, and
 [`.github/workflows/process-submission.yml`](.github/workflows/process-submission.yml)

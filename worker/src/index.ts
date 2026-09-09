@@ -1,6 +1,6 @@
 export interface Env {
   LEADERBOARD_KV: KVNamespace;
-  /** Fine-grained PAT, repo-scoped to grognard/scoreboard,
+  /** Fine-grained PAT, repo-scoped to grognard-xml/scoreboard,
    * Contents: read+write only. Set via `wrangler secret put`, never
    * present in source or shipped to any client. */
   GITHUB_WRITE_TOKEN: string;
@@ -10,7 +10,7 @@ export interface Env {
   ADMIN_GITHUB_IDS: string;
 }
 
-const REPO_OWNER = 'grognard';
+const REPO_OWNER = 'grognard-xml';
 const REPO_NAME = 'scoreboard';
 const SCORES_PATH = 'scores.json';
 const AVATARS_DIR = 'avatars';

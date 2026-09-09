@@ -2,7 +2,7 @@
 
 Cloudflare Worker backend for the leaderboard: verifies each submitter's
 GitHub identity, rate-limits, and publishes `scores.json` to
-[`grognard/scoreboard`](https://github.com/grognard/scoreboard).
+[`grognard-xml/scoreboard`](https://github.com/grognard-xml/scoreboard).
 
 Replaces the Phase 1 GitHub-Issues submission flow with a single API call
 from the desktop app — no copy/paste required — while keeping the same
