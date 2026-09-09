@@ -28,5 +28,20 @@
     "unlockedCount": 2,
     "totalAchievements": 83,
     "updatedAt": "2026-09-09T12:49:14.926Z"
+  },
+  {
+    "id": "324413310",
+    "displayName": "Chiaraonthemoon",
+    "commission": "Fusilier",
+    "metrics": {
+      "texts": 3,
+      "tags": 5,
+      "disambiguated": 0,
+      "places": 0,
+      "entities": 2
+    },
+    "unlockedCount": 1,
+    "totalAchievements": 83,
+    "updatedAt": "2026-09-09T12:52:53.315Z"
   }
 ]
