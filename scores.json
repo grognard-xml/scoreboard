@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "id": "323161365",
+    "displayName": "jbgeorgespicot",
+    "commission": "Fusilier",
+    "metrics": {
+      "texts": 8,
+      "tags": 8,
+      "disambiguated": 7,
+      "places": 2,
+      "entities": 7
+    },
+    "unlockedCount": 2,
+    "totalAchievements": 83,
+    "updatedAt": "2026-09-09T12:15:44.997Z"
+  },
+  {
+    "id": "76396963",
+    "displayName": "PotatoSinology",
+    "commission": "Capitaine",
+    "metrics": {
+      "texts": 374,
+      "tags": 5167,
+      "disambiguated": 2371,
+      "places": 75,
+      "entities": 33555
+    },
+    "unlockedCount": 31,
+    "totalAchievements": 83,
+    "updatedAt": "2026-09-01T12:01:35.458Z"
+  }
+]
