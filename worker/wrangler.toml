@@ -4,6 +4,12 @@ compatibility_date = "2026-07-01"
 workers_dev = true
 preview_urls = false
 
+# GitHub account ids allowed to call /admin/delete and /admin/clear.
+# Public ids, not a credential - an admin still has to present that
+# account's own GitHub token, which the Worker checks with GitHub.
+[vars]
+ADMIN_GITHUB_IDS = "76396963"
+
 [[kv_namespaces]]
 binding = "LEADERBOARD_KV"
 id = "3508e3948e704aafb306b95c5abd7fae"

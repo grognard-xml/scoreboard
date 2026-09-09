@@ -26,6 +26,39 @@ never trusted from the client's say-so.
    only that repo's Contents — set as a Worker secret, never present in
    source or shipped to any client.
 
+## Admin: removing entries
+
+`scores.json` in the repo is only ever a *rendering* of KV — every
+accepted submission rebuilds the whole file from every `score:` key. So
+editing (or emptying) that file directly does not remove anyone: the row
+stays in KV and the next unrelated submission republishes it. Clearing
+has to go through KV, and these two endpoints are how:
+
+```sh
+export GH_TOKEN=...   # any GitHub token; only ever used for GET /user
+
+# Remove one player, by GitHub account id
+curl -X POST https://<worker>.workers.dev/admin/delete \
+  -H 'content-type: application/json' \
+  -d "{\"token\":\"$GH_TOKEN\",\"id\":\"76396963\"}"
+
+# Empty the leaderboard entirely
+curl -X POST https://<worker>.workers.dev/admin/clear \
+  -H 'content-type: application/json' \
+  -d "{\"token\":\"$GH_TOKEN\"}"
+```
+
+Both drop the KV row(s) and the matching `ratelimit:` key(s), delete the
+portrait(s) from `avatars/`, and republish `scores.json` — so the site and
+KV can't drift apart again.
+
+Authorization is the same identity check as `/submit`, not a shared admin
+password: the Worker asks GitHub who `token` belongs to, then requires
+that account id to be in `ADMIN_GITHUB_IDS` (a plain var in
+`wrangler.toml` — public account ids, useless without that account's own
+token). Any token GitHub accepts for `GET /user` works, including a PAT
+with no scopes at all.
+
 ## Setup
 
 ```sh

@@ -4,6 +4,10 @@ export interface Env {
    * Contents: read+write only. Set via `wrangler secret put`, never
    * present in source or shipped to any client. */
   GITHUB_WRITE_TOKEN: string;
+  /** Comma-separated GitHub user ids allowed to call /admin/*. A plain
+   * var, not a secret: these are public account ids, and knowing one
+   * grants nothing without that account's own GitHub token. */
+  ADMIN_GITHUB_IDS: string;
 }
 
 const REPO_OWNER = 'lejeanbaptiste';
@@ -22,6 +26,9 @@ const METRIC_KEYS = [...REQUIRED_METRIC_KEYS, 'published'] as const;
 // well short of what would make a submission slow or bloat the repo.
 const MAX_AVATAR_BASE64_LENGTH = 500_000;
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47];
+// GitHub account ids are decimal integers; anything else in an admin
+// request is a typo or an attempt to steer the KV key / avatar path.
+const ID_PATTERN = /^[0-9]{1,20}$/;
 
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',
@@ -183,6 +190,53 @@ async function putGitHubFile(
   }
 }
 
+/** Removes a file from the public repo. A file that isn't there counts as
+ * success - the caller wanted it gone, and it is. */
+async function deleteGitHubFile(env: Env, path: string, message: string): Promise<void> {
+  const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`;
+  const headers = {
+    authorization: `Bearer ${env.GITHUB_WRITE_TOKEN}`,
+    'user-agent': 'ljb-leaderboard-worker',
+    accept: 'application/vnd.github+json',
+  };
+
+  const existing = await fetch(apiUrl, { headers });
+  if (existing.status === 404) return;
+  const sha = existing.ok ? ((await existing.json()) as { sha?: string }).sha : undefined;
+  if (!sha) return;
+
+  const deleteResponse = await fetch(apiUrl, {
+    method: 'DELETE',
+    headers: { ...headers, 'content-type': 'application/json' },
+    body: JSON.stringify({ message, sha }),
+  });
+  if (!deleteResponse.ok) {
+    throw new Error(
+      `GitHub contents DELETE failed for ${path}: ${deleteResponse.status} ${await deleteResponse.text()}`,
+    );
+  }
+}
+
+/** Lists a directory in the public repo, or [] if it doesn't exist. */
+async function listGitHubDir(env: Env, path: string): Promise<string[]> {
+  const response = await fetch(
+    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`,
+    {
+      headers: {
+        authorization: `Bearer ${env.GITHUB_WRITE_TOKEN}`,
+        'user-agent': 'ljb-leaderboard-worker',
+        accept: 'application/vnd.github+json',
+      },
+    },
+  );
+  if (!response.ok) return [];
+  const entries = (await response.json()) as unknown;
+  if (!Array.isArray(entries)) return [];
+  return entries
+    .map((entry) => (entry as { path?: unknown }).path)
+    .filter((entryPath): entryPath is string => typeof entryPath === 'string');
+}
+
 async function publishScoresJson(env: Env, entries: ScoreEntry[]): Promise<void> {
   const content = `${JSON.stringify(entries, null, 2)}\n`;
   const base64Content = btoa(unescape(encodeURIComponent(content)));
@@ -281,15 +335,145 @@ async function handleSubmit(request: Request, env: Env): Promise<Response> {
   });
 }
 
+function isAdmin(env: Env, id: string): boolean {
+  return (env.ADMIN_GITHUB_IDS ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .includes(id);
+}
+
+/** Admin auth reuses the same identity guarantee as /submit: the caller
+ * proves who they are with their own GitHub token and GitHub vouches for
+ * it, then that account has to be on the allowlist. Deliberately not a
+ * shared admin secret - one of those, once leaked, lets anyone wipe the
+ * board, whereas a leaked GitHub token only ever speaks for an account
+ * that isn't on the list. */
+async function verifyAdmin(body: unknown, env: Env): Promise<GitHubUser | null> {
+  const token =
+    typeof (body as Record<string, unknown>)?.token === 'string'
+      ? (body as Record<string, string>).token
+      : null;
+  if (!token) return null;
+  const user = await verifyGitHubUser(token);
+  if (!user || !isAdmin(env, String(user.id))) return null;
+  return user;
+}
+
+/** Collects every key under a prefix before deleting any of them - KV
+ * list results are a snapshot, so mutating mid-pagination can skip keys. */
+async function listKeyNames(kv: KVNamespace, prefix: string): Promise<string[]> {
+  const names: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await kv.list({ prefix, cursor });
+    for (const key of page.keys) names.push(key.name);
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return names;
+}
+
+/** Removes one player: their KV row, their rate-limit entry, their
+ * portrait, and their line in the published scores.json. Every clear has
+ * to go through here rather than being committed straight to
+ * scores.json - the file is only ever a rendering of KV, so editing it
+ * directly leaves the row in KV to be republished by the next unrelated
+ * submission. */
+async function handleAdminDelete(request: Request, env: Env): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Request body must be JSON.' }, 400);
+  }
+
+  const admin = await verifyAdmin(body, env);
+  if (!admin) return json({ error: 'Not authorized.' }, 403);
+
+  const targetId = (body as Record<string, unknown>).id;
+  if (typeof targetId !== 'string' || !ID_PATTERN.test(targetId)) {
+    return json({ error: 'Missing or malformed player id.' }, 400);
+  }
+
+  const removed = (await env.LEADERBOARD_KV.get(`score:${targetId}`)) !== null;
+  await env.LEADERBOARD_KV.delete(`score:${targetId}`);
+  await env.LEADERBOARD_KV.delete(`ratelimit:${targetId}`);
+
+  // KV reads are eventually consistent, so a list taken right after the
+  // delete can still hand back the row we just removed - filter it out
+  // explicitly rather than republishing it by accident.
+  const entries = (await loadAllEntries(env.LEADERBOARD_KV)).filter(
+    (entry) => entry.id !== targetId,
+  );
+  await publishScoresJson(env, entries);
+
+  try {
+    await deleteGitHubFile(env, `${AVATARS_DIR}/${targetId}.png`, `Remove avatar for ${targetId}`);
+  } catch {
+    // Decorative - an orphaned portrait shouldn't report the removal as failed.
+  }
+
+  return json({
+    ok: true,
+    removed,
+    remaining: entries.length,
+    message: removed
+      ? `Removed ${targetId} from the leaderboard.`
+      : `No leaderboard entry for ${targetId} - nothing to remove.`,
+  });
+}
+
+/** Empties the leaderboard: every KV row and rate-limit entry, every
+ * portrait, and scores.json itself. */
+async function handleAdminClear(request: Request, env: Env): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Request body must be JSON.' }, 400);
+  }
+
+  const admin = await verifyAdmin(body, env);
+  if (!admin) return json({ error: 'Not authorized.' }, 403);
+
+  const scoreKeys = await listKeyNames(env.LEADERBOARD_KV, 'score:');
+  const rateLimitKeys = await listKeyNames(env.LEADERBOARD_KV, 'ratelimit:');
+  for (const name of [...scoreKeys, ...rateLimitKeys]) {
+    await env.LEADERBOARD_KV.delete(name);
+  }
+
+  await publishScoresJson(env, []);
+
+  try {
+    for (const path of await listGitHubDir(env, AVATARS_DIR)) {
+      await deleteGitHubFile(env, path, 'Clear leaderboard avatars');
+    }
+  } catch {
+    // Decorative - orphaned portraits shouldn't report the clear as failed.
+  }
+
+  return json({
+    ok: true,
+    removed: scoreKeys.length,
+    message: `Cleared the leaderboard (${scoreKeys.length} entries).`,
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: CORS_HEADERS });
     }
     const url = new URL(request.url);
-    if (request.method === 'POST' && url.pathname === '/submit') {
+    const routes: Record<string, (request: Request, env: Env) => Promise<Response>> = {
+      '/submit': handleSubmit,
+      '/admin/delete': handleAdminDelete,
+      '/admin/clear': handleAdminClear,
+    };
+    const handler = request.method === 'POST' ? routes[url.pathname] : undefined;
+    if (handler) {
       try {
-        return await handleSubmit(request, env);
+        return await handler(request, env);
       } catch (err) {
         return json({ error: err instanceof Error ? err.message : 'Internal error.' }, 500);
       }
